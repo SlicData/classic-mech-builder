@@ -1,0 +1,1 @@
+-- CMB-7 initial schema draft
