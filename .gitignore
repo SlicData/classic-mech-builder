@@ -1,0 +1,17 @@
+# OS/Editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Node/Python common
+node_modules/
+dist/
+build/
+venv/
+__pycache__/
+*.log
+
+# Env
+.env
+.env.*
