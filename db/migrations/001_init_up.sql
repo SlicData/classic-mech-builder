@@ -180,3 +180,42 @@ CREATE TABLE IF NOT EXISTS mech_manufacturer (
   name     TEXT NOT NULL,
   PRIMARY KEY (mech_id, system)
 );
+-- =========================
+-- Hardening constraints
+-- =========================
+
+-- Movement logic: run ≥ walk
+ALTER TABLE mech
+  ADD CONSTRAINT chk_walk_run_mp
+  CHECK (run_mp >= walk_mp);
+
+-- Rear armor only on torsos (CT, LT, RT)
+ALTER TABLE mech_armor
+  ADD CONSTRAINT chk_rear_armor_locations
+  CHECK (armor_rear IS NULL OR loc IN ('CT','LT','RT'));
+
+-- Critical-slot: enforce correct refs based on item_type
+ALTER TABLE mech_crit_slot
+  ADD CONSTRAINT chk_crit_item_refs
+  CHECK (
+    CASE item_type
+      WHEN 'weapon'    THEN weapon_id   IS NOT NULL AND equipment_id IS NULL AND ammo_id IS NULL
+      WHEN 'equipment' THEN equipment_id IS NOT NULL AND weapon_id   IS NULL AND ammo_id IS NULL
+      WHEN 'ammo'      THEN ammo_id      IS NOT NULL AND weapon_id   IS NULL AND equipment_id IS NULL
+      ELSE                   weapon_id   IS NULL AND equipment_id    IS NULL AND ammo_id   IS NULL
+    END
+  );
+
+-- Slot capacity bounds per location (classic BT)
+ALTER TABLE mech_crit_slot
+  ADD CONSTRAINT chk_slot_index_by_location
+  CHECK (
+    (loc = 'HD'                        AND slot_index BETWEEN 1 AND 6)  OR
+    (loc IN ('CT','LT','RT','LA','RA') AND slot_index BETWEEN 1 AND 12) OR
+    (loc IN ('LL','RL')                AND slot_index BETWEEN 1 AND 6)
+  );
+
+-- Lookup indexes for common filters/joins
+CREATE INDEX IF NOT EXISTS idx_mech_weapon_lookup     ON mech_weapon (weapon_id);
+CREATE INDEX IF NOT EXISTS idx_mech_equipment_lookup  ON mech_equipment (equipment_id);
+CREATE INDEX IF NOT EXISTS idx_crit_slot_lookup       ON mech_crit_slot (mech_id, loc);
