@@ -1,5 +1,5 @@
 DB_NAME ?= cmb_dev
-.PHONY: migrate rollback newdb reset seed seed-megamek seed-test
+.PHONY: migrate rollback newdb reset seed seed-megamek seed-test test-queries validate-queries
 migrate:
 	DB_NAME=$(DB_NAME) ./db/migrate.sh
 rollback:
@@ -15,3 +15,13 @@ seed-test:
 seed:
 	@echo "Use 'make seed-megamek' to seed from MegaMek MTF files"
 	@echo "Use 'make seed-test' to test parsing without database changes"
+
+# CMB-11: Query validation tests
+test-queries:
+	@echo "Running manual SQL query tests..."
+	psql -d $(DB_NAME) -f test_queries.sql
+
+validate-queries:
+	@echo "Running automated query validation suite..."
+	python3 test_runner.py
+	@echo "Query validation complete!"
