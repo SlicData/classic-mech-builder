@@ -1,0 +1,3 @@
+[submodule "data/megamek"]
+	path = data/megamek
+	url = https://github.com/MegaMek/megamek.git
