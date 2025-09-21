@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import argparse
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Dict, List, Optional, Tuple, Set
 
 class TechBase(Enum):
     INNER_SPHERE = "inner_sphere"
@@ -46,6 +47,34 @@ class ArmorType(Enum):
     OTHER = "other"
 
 @dataclass
+class WeaponData:
+    name: str
+    location: str
+    count: int = 1
+    
+@dataclass 
+class ArmorData:
+    location: str
+    armor_front: int
+    armor_rear: Optional[int] = None
+    internal: int = 0
+
+@dataclass
+class EquipmentData:
+    name: str
+    location: str
+    count: int = 1
+
+@dataclass
+class CritSlotData:
+    location: str
+    slot_index: int
+    item_type: str
+    display_name: str
+    weapon_name: Optional[str] = None
+    equipment_name: Optional[str] = None
+
+@dataclass
 class MechData:
     chassis: str
     model: str
@@ -65,6 +94,12 @@ class MechData:
     year: Optional[int] = None
     source: Optional[str] = None
     cost_cbill: Optional[int] = None
+    # New fields for detailed data
+    weapons: List[WeaponData] = field(default_factory=list)
+    armor: List[ArmorData] = field(default_factory=list)
+    equipment: List[EquipmentData] = field(default_factory=list)
+    crit_slots: List[CritSlotData] = field(default_factory=list)
+    quirks: List[str] = field(default_factory=list)
 
 class MTFParser:
     def __init__(self):
@@ -102,7 +137,13 @@ class MTFParser:
                 role=self._parse_role(content),
                 year=self._parse_year(content),
                 source=self._parse_source(content),
-                cost_cbill=self._parse_cost(content)
+                cost_cbill=self._parse_cost(content),
+                # Parse new detailed data
+                weapons=self._parse_weapons(content),
+                armor=self._parse_armor_values(content),
+                equipment=self._parse_equipment(content),
+                crit_slots=self._parse_crit_slots(content),
+                quirks=self._parse_quirks(content)
             )
             
             return data
@@ -193,12 +234,14 @@ class MTFParser:
     
     def _parse_walk_mp(self, content: str) -> int:
         """Parse walk speed"""
-        match = re.search(r'walk:\s*(\d+)', content, re.IGNORECASE)
+        # Fix: Look for 'walk mp:' not just 'walk:'
+        match = re.search(r'walk\s+mp:\s*(\d+)', content, re.IGNORECASE)
         return int(match.group(1)) if match else 0
     
     def _parse_run_mp(self, content: str) -> int:
         """Parse run speed or calculate from walk"""
-        match = re.search(r'run:\s*(\d+)', content, re.IGNORECASE)
+        # Fix: Look for 'run mp:' not just 'run:'
+        match = re.search(r'run\s+mp:\s*(\d+)', content, re.IGNORECASE)
         if match:
             return int(match.group(1))
         
@@ -208,7 +251,8 @@ class MTFParser:
     
     def _parse_jump_mp(self, content: str) -> int:
         """Parse jump speed"""
-        match = re.search(r'jump:\s*(\d+)', content, re.IGNORECASE)
+        # Fix: Look for 'jump mp:' not just 'jump:'
+        match = re.search(r'jump\s+mp:\s*(\d+)', content, re.IGNORECASE)
         return int(match.group(1)) if match else 0
     
     def _parse_engine_type(self, content: str) -> EngineType:
@@ -269,6 +313,235 @@ class MTFParser:
         """Extract cost information if available"""
         match = re.search(r'cost:\s*(\d+)', content, re.IGNORECASE)
         return int(match.group(1)) if match else None
+    
+    def _parse_weapons(self, content: str) -> List[WeaponData]:
+        """Parse weapons section from MTF content"""
+        weapons = []
+        
+        # Look for Weapons: section
+        weapons_match = re.search(r'Weapons:\s*(\d+)', content, re.IGNORECASE)
+        if not weapons_match:
+            return weapons
+        
+        # Find the weapons list after "Weapons:X"
+        lines = content.split('\n')
+        in_weapons_section = False
+        
+        for line in lines:
+            line = line.strip()
+            
+            if re.match(r'Weapons:\s*\d+', line, re.IGNORECASE):
+                in_weapons_section = True
+                continue
+            
+            # Stop at next major section or empty line
+            if in_weapons_section:
+                if not line or re.match(r'^[A-Z][A-Za-z\s]+:', line):
+                    break
+                
+                # Parse weapon line: "HAG/20, Left Arm"
+                if ',' in line:
+                    parts = line.split(',')
+                    if len(parts) >= 2:
+                        weapon_name = parts[0].strip()
+                        location = parts[1].strip()
+                        
+                        # Convert location names
+                        location = self._normalize_location(location)
+                        
+                        weapons.append(WeaponData(
+                            name=weapon_name,
+                            location=location
+                        ))
+        
+        return weapons
+    
+    def _parse_armor_values(self, content: str) -> List[ArmorData]:
+        """Parse armor values by location"""
+        armor = []
+        
+        # Standard armor location patterns
+        armor_patterns = {
+            'LA': r'LA armor:\s*(\d+)',
+            'RA': r'RA armor:\s*(\d+)',
+            'LT': r'LT armor:\s*(\d+)',
+            'RT': r'RT armor:\s*(\d+)',
+            'CT': r'CT armor:\s*(\d+)',
+            'HD': r'HD armor:\s*(\d+)',
+            'LL': r'LL armor:\s*(\d+)',
+            'RL': r'RL armor:\s*(\d+)'
+        }
+        
+        # Rear armor patterns
+        rear_patterns = {
+            'LT': r'RTL armor:\s*(\d+)',
+            'RT': r'RTR armor:\s*(\d+)',
+            'CT': r'RTC armor:\s*(\d+)'
+        }
+        
+        for location, pattern in armor_patterns.items():
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                front_armor = int(match.group(1))
+                
+                # Check for rear armor
+                rear_armor = None
+                if location in rear_patterns:
+                    rear_match = re.search(rear_patterns[location], content, re.IGNORECASE)
+                    if rear_match:
+                        rear_armor = int(rear_match.group(1))
+                
+                armor.append(ArmorData(
+                    location=location,
+                    armor_front=front_armor,
+                    armor_rear=rear_armor,
+                    internal=self._calculate_internal_structure(location, self._parse_tonnage(content))
+                ))
+        
+        return armor
+    
+    def _parse_equipment(self, content: str) -> List[EquipmentData]:
+        """Parse equipment from critical slot sections"""
+        equipment = []
+        equipment_seen = set()
+        
+        # Parse critical slot sections for equipment
+        location_sections = self._parse_location_sections(content)
+        
+        for location, items in location_sections.items():
+            for item in items:
+                # Skip basic actuators and structure
+                if item in ['Shoulder', 'Upper Arm Actuator', 'Lower Arm Actuator', 
+                           'Hand Actuator', 'Hip', 'Upper Leg Actuator', 'Lower Leg Actuator',
+                           'Foot Actuator', 'Life Support', 'Sensors', 'Cockpit', 
+                           'Fusion Engine', 'Gyro', '-Empty-']:
+                    continue
+                
+                # Skip weapons (handled separately)
+                if any(weapon_keyword in item.upper() for weapon_keyword in 
+                      ['LASER', 'PPC', 'AC', 'LRM', 'SRM', 'GAUSS', 'RIFLE']):
+                    continue
+                
+                # This is equipment
+                equipment_key = f"{item}_{location}"
+                if equipment_key not in equipment_seen:
+                    equipment_seen.add(equipment_key)
+                    equipment.append(EquipmentData(
+                        name=item,
+                        location=self._normalize_location(location)
+                    ))
+        
+        return equipment
+    
+    def _parse_crit_slots(self, content: str) -> List[CritSlotData]:
+        """Parse critical slot layout from location sections"""
+        crit_slots = []
+        
+        location_sections = self._parse_location_sections(content)
+        
+        for location, items in location_sections.items():
+            normalized_location = self._normalize_location(location)
+            
+            for slot_index, item in enumerate(items, 1):
+                # Determine item type
+                item_type = self._classify_crit_item(item)
+                
+                crit_slots.append(CritSlotData(
+                    location=normalized_location,
+                    slot_index=slot_index,
+                    item_type=item_type,
+                    display_name=item
+                ))
+        
+        return crit_slots
+    
+    def _parse_quirks(self, content: str) -> List[str]:
+        """Parse quirk lines"""
+        quirks = []
+        
+        for line in content.split('\n'):
+            line = line.strip()
+            if line.startswith('quirk:'):
+                quirk = line.replace('quirk:', '').strip()
+                if quirk:
+                    quirks.append(quirk)
+        
+        return quirks
+    
+    def _parse_location_sections(self, content: str) -> Dict[str, List[str]]:
+        """Parse location sections (Left Arm:, Right Arm:, etc.)"""
+        sections = {}
+        lines = content.split('\n')
+        current_location = None
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Check if this is a location header
+            if line.endswith(':') and len(line.split()) <= 3:
+                potential_location = line[:-1].strip()
+                if potential_location in ['Left Arm', 'Right Arm', 'Left Torso', 'Right Torso',
+                                        'Center Torso', 'Head', 'Left Leg', 'Right Leg']:
+                    current_location = potential_location
+                    sections[current_location] = []
+                    continue
+            
+            # Add items to current location
+            if current_location and line and not line.startswith('overview:'):
+                sections[current_location].append(line)
+        
+        return sections
+    
+    def _normalize_location(self, location: str) -> str:
+        """Convert location names to database enum values"""
+        location_map = {
+            'Left Arm': 'LA',
+            'Right Arm': 'RA', 
+            'Left Torso': 'LT',
+            'Right Torso': 'RT',
+            'Center Torso': 'CT',
+            'Head': 'HD',
+            'Left Leg': 'LL',
+            'Right Leg': 'RL'
+        }
+        return location_map.get(location, location)
+    
+    def _classify_crit_item(self, item: str) -> str:
+        """Classify critical slot item type"""
+        item_upper = item.upper()
+        
+        if any(weapon_keyword in item_upper for weapon_keyword in 
+              ['LASER', 'PPC', 'AC', 'LRM', 'SRM', 'GAUSS', 'RIFLE', 'CANNON']):
+            return 'weapon'
+        elif 'AMMO' in item_upper:
+            return 'ammo'
+        elif item in ['Fusion Engine', 'Gyro']:
+            return item.lower().replace(' ', '_')
+        elif item in ['Life Support', 'Sensors', 'Cockpit']:
+            return item.lower().replace(' ', '_')
+        elif 'HEATSINK' in item_upper or 'HEAT SINK' in item_upper:
+            return 'heatsink'
+        elif 'JUMP JET' in item_upper:
+            return 'jump_jet'
+        elif item == '-Empty-':
+            return 'empty'
+        else:
+            return 'equipment'
+    
+    def _calculate_internal_structure(self, location: str, tonnage: int) -> int:
+        """Calculate internal structure points for a location"""
+        # Standard BattleTech internal structure rules
+        if location == 'HD':
+            return 3
+        elif location == 'CT':
+            return tonnage // 10
+        elif location in ['LT', 'RT']:
+            return tonnage // 10
+        elif location in ['LA', 'RA']:
+            return tonnage // 10
+        elif location in ['LL', 'RL']:
+            return tonnage // 10
+        return 0
 
 class DatabaseSeeder:
     def __init__(self, db_name: str = "cmb_dev"):
@@ -279,40 +552,15 @@ class DatabaseSeeder:
     def connect(self):
         """Connect to PostgreSQL database"""
         try:
-            # Try different connection methods
-            connection_params = {
-                'host': 'localhost',
-                'database': self.db_name
-            }
-            
-            # First try with system user (most common on macOS)
-            import getpass
-            system_user = getpass.getuser()
-            
-            try:
-                connection_params['user'] = system_user
-                self.conn = psycopg2.connect(**connection_params)
+            # Use the same detection logic as our test runner
+            from db_config import detect_db_config
+            config = detect_db_config()
+            if config:
+                self.conn = psycopg2.connect(**config)
                 self.conn.autocommit = True
-                self.logger.info(f"Connected to database as user: {system_user}")
-                return
-            except psycopg2.OperationalError:
-                pass
-            
-            # Fallback: try postgres user
-            try:
-                connection_params['user'] = 'postgres'
-                self.conn = psycopg2.connect(**connection_params)
-                self.conn.autocommit = True
-                self.logger.info("Connected to database as user: postgres")
-                return
-            except psycopg2.OperationalError:
-                pass
-            
-            # Final fallback: no explicit user (use peer authentication)
-            del connection_params['user']
-            self.conn = psycopg2.connect(**connection_params)
-            self.conn.autocommit = True
-            self.logger.info("Connected to database using default authentication")
+                self.logger.info(f"Connected to database as user: {config['user']}")
+            else:
+                raise Exception("Could not detect database configuration")
             
         except Exception as e:
             self.logger.error(f"Database connection failed: {e}")
@@ -320,46 +568,252 @@ class DatabaseSeeder:
             raise
     
     def insert_mech(self, mech: MechData) -> bool:
-        """Insert mech data into database"""
+        """Insert complete mech data into database"""
         try:
             cursor = self.conn.cursor()
             
-            # Use UPSERT to handle duplicates
+            # Insert main mech record first
+            mech_id = self._insert_mech_main(cursor, mech)
+            if not mech_id:
+                return False
+    
+    def _insert_mech_main(self, cursor, mech: MechData) -> Optional[int]:
+        """Insert main mech record and return mech_id"""
+        # Use UPSERT to handle duplicates
+        sql = """
+            INSERT INTO mech (
+                chassis, model, tech_base, era, rules_level,
+                tonnage, battle_value, walk_mp, run_mp, jump_mp,
+                engine_type, engine_rating, heat_sinks, armor_type,
+                role, year, source, cost_cbill
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (chassis, model) DO UPDATE SET
+                tech_base = EXCLUDED.tech_base,
+                era = EXCLUDED.era,
+                rules_level = EXCLUDED.rules_level,
+                tonnage = EXCLUDED.tonnage,
+                battle_value = EXCLUDED.battle_value,
+                walk_mp = EXCLUDED.walk_mp,
+                run_mp = EXCLUDED.run_mp,
+                jump_mp = EXCLUDED.jump_mp,
+                engine_type = EXCLUDED.engine_type,
+                engine_rating = EXCLUDED.engine_rating,
+                heat_sinks = EXCLUDED.heat_sinks,
+                armor_type = EXCLUDED.armor_type,
+                role = EXCLUDED.role,
+                year = EXCLUDED.year,
+                source = EXCLUDED.source,
+                cost_cbill = EXCLUDED.cost_cbill,
+                updated_at = NOW()
+            RETURNING id
+        """
+        
+        cursor.execute(sql, (
+            mech.chassis, mech.model, mech.tech_base.value, mech.era.value,
+            mech.rules_level, mech.tonnage, mech.battle_value,
+            mech.walk_mp, mech.run_mp, mech.jump_mp,
+            mech.engine_type.value, mech.engine_rating, mech.heat_sinks,
+            mech.armor_type.value, mech.role, mech.year, mech.source,
+            mech.cost_cbill
+        ))
+        
+        result = cursor.fetchone()
+        return result[0] if result else None
+    
+    def _insert_armor_data(self, cursor, mech_id: int, armor_data: List[ArmorData]):
+        """Insert armor data for all locations"""
+        # Delete existing armor data
+        cursor.execute("DELETE FROM mech_armor WHERE mech_id = %s", (mech_id,))
+        
+        for armor in armor_data:
             sql = """
-                INSERT INTO mech (
-                    chassis, model, tech_base, era, rules_level,
-                    tonnage, battle_value, walk_mp, run_mp, jump_mp,
-                    engine_type, engine_rating, heat_sinks, armor_type,
-                    role, year, source, cost_cbill
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (chassis, model) DO UPDATE SET
-                    tech_base = EXCLUDED.tech_base,
-                    era = EXCLUDED.era,
-                    rules_level = EXCLUDED.rules_level,
-                    tonnage = EXCLUDED.tonnage,
-                    battle_value = EXCLUDED.battle_value,
-                    walk_mp = EXCLUDED.walk_mp,
-                    run_mp = EXCLUDED.run_mp,
-                    jump_mp = EXCLUDED.jump_mp,
-                    engine_type = EXCLUDED.engine_type,
-                    engine_rating = EXCLUDED.engine_rating,
-                    heat_sinks = EXCLUDED.heat_sinks,
-                    armor_type = EXCLUDED.armor_type,
-                    role = EXCLUDED.role,
-                    year = EXCLUDED.year,
-                    source = EXCLUDED.source,
-                    cost_cbill = EXCLUDED.cost_cbill,
-                    updated_at = NOW()
+                INSERT INTO mech_armor (mech_id, loc, armor_front, armor_rear, internal)
+                VALUES (%s, %s, %s, %s, %s)
             """
-            
             cursor.execute(sql, (
-                mech.chassis, mech.model, mech.tech_base.value, mech.era.value,
-                mech.rules_level, mech.tonnage, mech.battle_value,
-                mech.walk_mp, mech.run_mp, mech.jump_mp,
-                mech.engine_type.value, mech.engine_rating, mech.heat_sinks,
-                mech.armor_type.value, mech.role, mech.year, mech.source,
-                mech.cost_cbill
+                mech_id, armor.location, armor.armor_front, 
+                armor.armor_rear, armor.internal
             ))
+    
+    def _insert_weapon_data(self, cursor, mech_id: int, weapons: List[WeaponData]):
+        """Insert weapon data with catalog entries"""
+        # Delete existing weapon data
+        cursor.execute("DELETE FROM mech_weapon WHERE mech_id = %s", (mech_id,))
+        
+        for weapon in weapons:
+            # Insert/get weapon catalog entry
+            weapon_id = self._get_or_create_weapon(cursor, weapon.name)
+            
+            if weapon_id:
+                # Insert mech weapon assignment
+                sql = """
+                    INSERT INTO mech_weapon (mech_id, weapon_id, count)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (mech_id, weapon_id) DO UPDATE SET
+                        count = mech_weapon.count + EXCLUDED.count
+                """
+                cursor.execute(sql, (mech_id, weapon_id, weapon.count))
+    
+    def _insert_equipment_data(self, cursor, mech_id: int, equipment: List[EquipmentData]):
+        """Insert equipment data with catalog entries"""
+        # Delete existing equipment data
+        cursor.execute("DELETE FROM mech_equipment WHERE mech_id = %s", (mech_id,))
+        
+        for equip in equipment:
+            # Insert/get equipment catalog entry
+            equipment_id = self._get_or_create_equipment(cursor, equip.name)
+            
+            if equipment_id:
+                # Insert mech equipment assignment
+                sql = """
+                    INSERT INTO mech_equipment (mech_id, equipment_id, count)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (mech_id, equipment_id) DO UPDATE SET
+                        count = mech_equipment.count + EXCLUDED.count
+                """
+                cursor.execute(sql, (mech_id, equipment_id, equip.count))
+    
+    def _insert_crit_slot_data(self, cursor, mech_id: int, crit_slots: List[CritSlotData]):
+        """Insert critical slot layout"""
+        # Delete existing crit slot data
+        cursor.execute("DELETE FROM mech_crit_slot WHERE mech_id = %s", (mech_id,))
+        
+        for slot in crit_slots:
+            sql = """
+                INSERT INTO mech_crit_slot (
+                    mech_id, loc, slot_index, item_type, display_name
+                ) VALUES (%s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                mech_id, slot.location, slot.slot_index, 
+                slot.item_type, slot.display_name
+            ))
+    
+    def _insert_quirk_data(self, cursor, mech_id: int, quirks: List[str]):
+        """Insert quirk data"""
+        # Delete existing quirk data
+        cursor.execute("DELETE FROM mech_quirk WHERE mech_id = %s", (mech_id,))
+        
+        for quirk in quirks:
+            sql = """
+                INSERT INTO mech_quirk (mech_id, quirk)
+                VALUES (%s, %s)
+            """
+            cursor.execute(sql, (mech_id, quirk))
+    
+    def _get_or_create_weapon(self, cursor, weapon_name: str) -> Optional[int]:
+        """Get or create weapon catalog entry"""
+        # Check if weapon exists
+        cursor.execute(
+            "SELECT id FROM weapon_catalog WHERE name = %s", 
+            (weapon_name,)
+        )
+        result = cursor.fetchone()
+        if result:
+            return result[0]
+        
+        # Create new weapon entry with basic data
+        sql = """
+            INSERT INTO weapon_catalog (name, class, tech_base)
+            VALUES (%s, %s, %s)
+            RETURNING id
+        """
+        
+        # Basic classification (can be enhanced later)
+        weapon_class = self._classify_weapon(weapon_name)
+        tech_base = self._guess_weapon_tech_base(weapon_name)
+        
+        cursor.execute(sql, (weapon_name, weapon_class, tech_base))
+        result = cursor.fetchone()
+        return result[0] if result else None
+    
+    def _get_or_create_equipment(self, cursor, equipment_name: str) -> Optional[int]:
+        """Get or create equipment catalog entry"""
+        # Check if equipment exists
+        cursor.execute(
+            "SELECT id FROM equipment_catalog WHERE name = %s", 
+            (equipment_name,)
+        )
+        result = cursor.fetchone()
+        if result:
+            return result[0]
+        
+        # Create new equipment entry
+        sql = """
+            INSERT INTO equipment_catalog (name, category, tech_base)
+            VALUES (%s, %s, %s)
+            RETURNING id
+        """
+        
+        category = self._classify_equipment(equipment_name)
+        tech_base = self._guess_equipment_tech_base(equipment_name)
+        
+        cursor.execute(sql, (equipment_name, category, tech_base))
+        result = cursor.fetchone()
+        return result[0] if result else None
+    
+    def _classify_weapon(self, weapon_name: str) -> str:
+        """Classify weapon by name"""
+        name_upper = weapon_name.upper()
+        
+        if any(keyword in name_upper for keyword in ['LASER', 'PPC']):
+            return 'energy'
+        elif any(keyword in name_upper for keyword in ['AC', 'GAUSS', 'RIFLE']):
+            return 'ballistic'
+        elif any(keyword in name_upper for keyword in ['LRM', 'SRM', 'MRM', 'ROCKET']):
+            return 'missile'
+        elif any(keyword in name_upper for keyword in ['TAG', 'NARC', 'ECM']):
+            return 'support'
+        else:
+            return 'ballistic'  # Default
+    
+    def _classify_equipment(self, equipment_name: str) -> str:
+        """Classify equipment by name"""
+        name_upper = equipment_name.upper()
+        
+        if any(keyword in name_upper for keyword in ['HEAT', 'SINK']):
+            return 'heat'
+        elif any(keyword in name_upper for keyword in ['ECM', 'GUARDIAN', 'PROBE']):
+            return 'electronics'
+        elif any(keyword in name_upper for keyword in ['JUMP', 'JET']):
+            return 'movement'
+        elif any(keyword in name_upper for keyword in ['ENDO', 'STEEL']):
+            return 'structure'
+        elif any(keyword in name_upper for keyword in ['GYRO']):
+            return 'gyro'
+        elif any(keyword in name_upper for keyword in ['COCKPIT']):
+            return 'cockpit'
+        else:
+            return 'other'
+    
+    def _guess_weapon_tech_base(self, weapon_name: str) -> str:
+        """Guess weapon tech base from name"""
+        name_upper = weapon_name.upper()
+        
+        if name_upper.startswith('CL') or name_upper.startswith('CLAN'):
+            return 'clan'
+        elif name_upper.startswith('IS') or 'INNER SPHERE' in name_upper:
+            return 'inner_sphere'
+        else:
+            return 'inner_sphere'  # Default
+    
+    def _guess_equipment_tech_base(self, equipment_name: str) -> str:
+        """Guess equipment tech base from name"""
+        name_upper = equipment_name.upper()
+        
+        if name_upper.startswith('CL') or name_upper.startswith('CLAN'):
+            return 'clan'
+        elif name_upper.startswith('IS') or 'INNER SPHERE' in name_upper:
+            return 'inner_sphere'
+        else:
+            return 'inner_sphere'  # Default
+            
+            # Insert related data
+            self._insert_armor_data(cursor, mech_id, mech.armor)
+            self._insert_weapon_data(cursor, mech_id, mech.weapons)
+            self._insert_equipment_data(cursor, mech_id, mech.equipment)
+            self._insert_crit_slot_data(cursor, mech_id, mech.crit_slots)
+            self._insert_quirk_data(cursor, mech_id, mech.quirks)
             
             return True
             
