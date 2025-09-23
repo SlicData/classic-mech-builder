@@ -221,10 +221,6 @@ The modular architecture makes contributions easier:
 - **Scalable** for future growth
 - **Clear separation** of concerns
 
-## 📝 License
-
-[License information here]
-
 ---
 
 **Built with ❤️ for the BattleTech community**
