@@ -1,6 +1,6 @@
 # Classic Mech Builder
 
-A web application for building and managing BattleTech mechs, with automated data import from MegaMek MTF files.
+A web application for building and managing BattleTech collections, with automated data import from MegaMek MTF files.
 
 ## 🏗️ Project Architecture
 
