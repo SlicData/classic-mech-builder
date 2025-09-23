@@ -12,7 +12,7 @@ DO $$ BEGIN
     CREATE TYPE era AS ENUM ('star_league','succession','clan_invasion','civil_war','jihad','dark_age','ilclan');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'engine_type') THEN
-    CREATE TYPE engine_type AS ENUM ('fusion','xl_fusion','light_fusion','ice','compact_fusion','other');
+    CREATE TYPE engine_type AS ENUM ('fusion','xl_fusion','light_fusion','ice','compact_fusion','xxl_fusion','fuel_cell','other');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'armor_type') THEN
     CREATE TYPE armor_type AS ENUM ('standard','ferro_fibrous','hardened','stealth','endo_steel','other');
