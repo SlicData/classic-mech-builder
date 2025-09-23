@@ -9,16 +9,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional, Dict, List
 from enum import Enum
-
-class EngineType(Enum):
-    """BattleTech engine types"""
-    FUSION = "Fusion"
-    XL_FUSION = "XL Fusion"
-    LIGHT_FUSION = "Light Fusion"
-    ICE = "ICE"
-    COMPACT_FUSION = "Compact Fusion"
-    XXL_FUSION = "XXL Fusion"
-    FUEL_CELL = "Fuel Cell"
+from .utils import EngineType
 
 class HeatSinkType(Enum):
     """BattleTech heat sink types"""
@@ -150,14 +141,14 @@ class EngineParser:
         """Normalize engine type string to enum"""
         engine_type_lower = engine_type_str.lower()
         
-        if 'xl' in engine_type_lower:
+        if 'xxl' in engine_type_lower:
+            return EngineType.XXL_FUSION
+        elif 'xl' in engine_type_lower:
             return EngineType.XL_FUSION
         elif 'light' in engine_type_lower:
             return EngineType.LIGHT_FUSION
         elif 'compact' in engine_type_lower:
             return EngineType.COMPACT_FUSION
-        elif 'xxl' in engine_type_lower:
-            return EngineType.XXL_FUSION
         elif 'ice' in engine_type_lower:
             return EngineType.ICE
         elif 'fuel' in engine_type_lower:

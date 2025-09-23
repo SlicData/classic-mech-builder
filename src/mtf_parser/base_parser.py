@@ -46,6 +46,10 @@ class MTFParser:
             # Parse armor with validation
             armor_data, armor_type_parsed = self.armor_parser.parse_armor(content, self._parse_tonnage(content))
             
+            # If no armor data from advanced parser, use fallback
+            if not armor_data:
+                armor_data = self._parse_armor_values(content)
+            
             # Parse engine and heat sinks
             engine_data = self.engine_parser.parse_engine(content)
             heat_sink_data = self.engine_parser.parse_heat_sinks(content)
@@ -87,7 +91,7 @@ class MTFParser:
                 source=self._parse_source(content),
                 cost_cbill=self._parse_cost(content),
                 weapons=self.weapon_parser.parse_weapons(content),
-                armor=armor_data,
+                armor=armor_data,  # This should be a list of ArmorData
                 equipment=self._parse_equipment(content),
                 crit_slots=crit_slots,
                 quirks=self._parse_quirks(content)

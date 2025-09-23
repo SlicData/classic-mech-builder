@@ -29,6 +29,8 @@ class EngineType(Enum):
     LIGHT_FUSION = "light_fusion"
     ICE = "ice"
     COMPACT_FUSION = "compact_fusion"
+    XXL_FUSION = "xxl_fusion"
+    FUEL_CELL = "fuel_cell"
     OTHER = "other"
 
 class ArmorType(Enum):
