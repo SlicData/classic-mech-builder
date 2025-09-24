@@ -1,6 +1,6 @@
 # Classic Mech Builder
 
-A web application for building and managing BattleTech mechs, with automated data import from MegaMek MTF files.
+A web application for building and managing BattleTech collections, with automated data import from MegaMek MTF files.
 
 ## 🏗️ Project Architecture
 
@@ -165,7 +165,7 @@ python3 tests/test_steps_1_2.py
 # Comprehensive integration test
 python3 tests/test_complete_integration.py
 
-# Quick parser validation
+# Test movement parsing specifically
 python3 -c "
 import sys; sys.path.insert(0, 'src')
 from mtf_parser.movement_parser import MovementParser
