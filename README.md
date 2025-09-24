@@ -30,11 +30,21 @@ classic-mech-builder/
 ├── db/                     # 🗄️ Database structure
 │   ├── migrations/        # Schema migrations
 │   └── seeds/             # Data seeding scripts
-├── tests/                  # 🧪 All test files
-├── scripts/                # 🔧 Utility scripts
+├── tests/                  # 🧪 Organized test suite
+│   ├── unit/              # Unit tests for individual components
+│   ├── integration/       # Integration tests for system components
+│   ├── database/          # Database-specific performance and validation tests
+│   ├── test_modular_structure.py    # Core module import tests
+│   ├── test_complete_integration.py # Comprehensive integration tests
+│   └── test_steps_1_2.py           # Core parsing functionality tests
+├── scripts/                # 🔧 Utility and maintenance scripts
+│   ├── database/          # Database maintenance and status checks
+│   ├── deployment/        # Deployment and release scripts
+│   ├── diagnostics/       # Debugging tools and system health checks
+│   └── seeding/           # Data import and seeding utilities
 ├── docs/                   # 📚 Documentation
-├── data/                   # 📦 External data (MegaMek files)
-└── temp/                   # 🗂️ Development files
+└── data/                   # 📦 External data (MegaMek files)
+    └── megamek/           # MegaMek submodule with MTF files
 ```
 
 #### Why This Structure?
@@ -44,14 +54,24 @@ classic-mech-builder/
 - **Benefit**: IDEs can focus on this directory for code intelligence
 - **Scalability**: Easy to add new modules (web UI, API, etc.)
 
-**`tests/` - Isolated Testing**
-- **Problem Solved**: Test files were cluttering the root directory
-- **Benefit**: Clear separation makes testing easier to manage
-- **Convention**: Follows industry standard practices
+**`tests/` - Organized Test Suite**
+- **Problem Solved**: Test files were scattered and hard to manage
+- **Solution**: Organized by test type for easy navigation
+- **Subdirectories**:
+  - `unit/` - Test individual components in isolation
+  - `integration/` - Test system integration and workflows
+  - `database/` - Performance tests, query validation, and DB health checks
+- **Benefit**: Easy to find and run specific types of tests
+- **Convention**: Follows industry standard testing practices
 
-**`scripts/` - Utilities**
-- **Purpose**: One-off scripts, maintenance tools, deployment helpers
-- **Benefit**: Keeps utility code separate from main application logic
+**`scripts/` - Organized Utilities**
+- **Purpose**: All utility scripts organized by function
+- **Subdirectories**:
+  - `database/` - Database maintenance, status checks, utilities
+  - `deployment/` - Build, deploy, and release automation
+  - `diagnostics/` - Debugging tools, performance analysis, health checks
+  - `seeding/` - Data import and seeding utilities
+- **Benefit**: Easy to find the right tool for the job
 
 **Modular `src/mtf_parser/`**
 - **Problem Solved**: Original parser was a 500+ line monolithic file
@@ -83,13 +103,67 @@ python3 db/seeds/mtf_seeder.py --megamek-path ./data/megamek --verbose
 python3 db/seeds/mtf_seeder.py --megamek-path ./data/megamek --db-name cmb_production
 ```
 
+### Common Scripts
+
+#### Database Management
+```bash
+# Check database status
+python3 scripts/database/check_database_status.py
+
+# Run diagnostics
+python3 scripts/diagnostics/cmb20_diagnostic.py
+
+# Verify system setup
+python3 scripts/diagnostics/cmb20_verification.py
+```
+
+#### Development Tools
+```bash
+# Create configuration from template
+cp config_template.py config.py
+
+# Deploy changes
+bash scripts/deployment/push_cmb20.sh
+```
+
 ### Testing
+
+The organized test suite makes it easy to run specific types of tests:
+
+#### Unit Tests
+```bash
+# Test individual components
+python3 tests/unit/test_movement_parsing.py
+python3 tests/unit/test_parser.py
+```
+
+#### Integration Tests
+```bash
+# Test system integration
+python3 tests/integration/test_cmb20_integration.py
+python3 tests/integration/test_complete_seeder.py
+python3 tests/integration/test_seeder.py
+```
+
+#### Database Tests
+```bash
+# Run database performance and validation tests
+python3 tests/database/test_runner.py
+
+# Run SQL validation queries
+psql -d cmb_dev -f tests/database/test_queries.sql
+```
+
+#### Core Tests
 ```bash
 # Test modular structure
 python3 tests/test_modular_structure.py
 
-# Test specific components
+# Test core parsing functionality
 python3 tests/test_steps_1_2.py
+
+# Comprehensive integration test
+python3 tests/test_complete_integration.py
 
 # Test movement parsing specifically
 python3 -c "
@@ -108,7 +182,7 @@ print('✅ Movement parser working')
    - Return structured data
    - Handle errors gracefully
 3. **Add to base parser** orchestration
-4. **Write tests** in `tests/`
+4. **Write tests** in appropriate `tests/` subdirectory
 5. **Update database integration** if needed
 
 #### Example: Adding Armor Parsing
@@ -128,7 +202,27 @@ from .armor_parser import ArmorParser
 class MTFParser:
     def __init__(self):
         self.armor_parser = ArmorParser(self.logger)
+
+# Add unit test in tests/unit/test_armor_parsing.py
+# Add integration test in tests/integration/ if needed
 ```
+
+#### Adding New Utility Scripts
+1. **Determine the script's purpose** and place in appropriate `scripts/` subdirectory:
+   - Database-related → `scripts/database/`
+   - Deployment/build → `scripts/deployment/`
+   - Debugging/analysis → `scripts/diagnostics/`
+   - Data import → `scripts/seeding/`
+2. **Use descriptive names** that indicate function
+3. **Add documentation** at the top of the file
+4. **Update this README** if it's a commonly used script
+
+#### Writing Tests
+1. **Unit tests** → `tests/unit/` - Test individual functions/classes
+2. **Integration tests** → `tests/integration/` - Test component interactions
+3. **Database tests** → `tests/database/` - Test queries, performance, validation
+4. **Follow naming conventions** - `test_*.py` for all test files
+5. **Keep tests focused** - One test file per component/feature
 
 ## 🚀 Getting Started
 
@@ -160,13 +254,31 @@ class MTFParser:
    cp config_template.py config.py
    ```
 
-4. **Import MTF data**
+4. **Verify setup**
+   ```bash
+   # Run system verification
+   python3 scripts/diagnostics/cmb20_verification.py
+   ```
+
+5. **Import MTF data**
    ```bash
    # Test with a few files first
-   python3 db/seeds/mtf_seeder.py --megamek-path /path/to/megamek --dry-run --limit 5
+   python3 db/seeds/mtf_seeder.py --megamek-path ./data/megamek --dry-run --limit 5
    
    # Full import
-   python3 db/seeds/mtf_seeder.py --megamek-path /path/to/megamek
+   python3 db/seeds/mtf_seeder.py --megamek-path ./data/megamek
+   ```
+
+6. **Validate installation**
+   ```bash
+   # Check database connectivity
+   python3 scripts/database/check_database_status.py
+   
+   # Run comprehensive tests
+   python3 tests/test_complete_integration.py
+   
+   # Run database validation
+   python3 tests/database/test_runner.py
    ```
 
 ### Development Workflow
@@ -178,28 +290,65 @@ python3 tests/test_modular_structure.py
 
 # Test specific parsing
 python3 tests/test_steps_1_2.py
+
+# Run unit tests
+python3 tests/unit/test_movement_parsing.py
+```
+
+**Working on database integration:**
+```bash
+# Test integration
+python3 tests/integration/test_cmb20_integration.py
+
+# Run database tests
+python3 tests/database/test_runner.py
 ```
 
 **Adding new parsing features:**
 1. Create module in `src/mtf_parser/`
-2. Add tests in `tests/`
-3. Integrate with `base_parser.py`
-4. Update database schema if needed
+2. Add unit tests in `tests/unit/`
+3. Add integration tests in `tests/integration/` if needed
+4. Integrate with `base_parser.py`
+5. Update database schema if needed
 
-**Project structure:**
+**Adding utility scripts:**
+1. Place in appropriate `scripts/` subdirectory
+2. Follow naming conventions
+3. Document usage and purpose
+
+**Project navigation:**
 - Start in `src/` for main code
-- Check `tests/` for examples
-- See `docs/` for detailed documentation
+- Check `tests/unit/` for component examples
+- See `tests/integration/` for system tests
+- Use `scripts/` for utilities and maintenance
+- Refer to `docs/` for detailed documentation
 
 ## 🤝 Contributing
 
-The modular architecture makes contributions easier:
+The modular architecture and organized structure make contributions easier:
 
 1. **Pick a module** to work on
-2. **Write tests first** (TDD approach)
+2. **Write tests first** (TDD approach) in appropriate test subdirectory
 3. **Implement feature** in focused module
 4. **Update integration** in base parser
-5. **Document changes** in relevant files
+5. **Run test suite** to verify changes
+6. **Document changes** in relevant files
+
+### File Organization Guidelines
+
+- **Keep the root directory clean** - only essential files like README, LICENSE, Makefile
+- **Use the organized structure** - place files in their logical subdirectories
+- **Follow naming conventions** - descriptive names that indicate purpose
+- **Write appropriate tests** - unit tests for components, integration tests for workflows
+- **Update documentation** when adding new scripts or modules
+
+### Testing Guidelines
+
+- **Unit tests** should be fast, focused, and test one thing
+- **Integration tests** should test realistic workflows
+- **Database tests** should validate performance and data integrity
+- **All tests** should be runnable independently
+- **Test files** should have clear, descriptive names
 
 ## 📋 Technical Decisions
 
@@ -220,6 +369,12 @@ The modular architecture makes contributions easier:
 - **Tool-friendly** (IDEs, linters, CI/CD)
 - **Scalable** for future growth
 - **Clear separation** of concerns
+- **Easy navigation** - find what you need quickly
+- **Organized testing** - run specific test types easily
+
+## 📝 License
+
+[License information here]
 
 ---
 

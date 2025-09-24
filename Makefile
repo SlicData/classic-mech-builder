@@ -2,6 +2,10 @@ DB_NAME ?= cmb_dev
 .PHONY: migrate rollback newdb reset seed seed-megamek seed-test test-queries validate-queries
 migrate:
 	DB_NAME=$(DB_NAME) ./db/migrate.sh
+
+fix-enums:
+	psql -d $(DB_NAME) -f db/migrations/003_engine_types_up.sql
+	@echo "Added missing engine types (xxl_fusion, fuel_cell)"
 rollback:
 	DB_NAME=$(DB_NAME) ./db/rollback_last.sh
 newdb:
